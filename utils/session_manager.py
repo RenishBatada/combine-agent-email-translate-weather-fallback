@@ -1,5 +1,6 @@
 from typing import Dict, List, Tuple
 
+
 class SessionManager:
     def __init__(self):
         self.sessions: Dict[str, List[Tuple[str, str]]] = {}

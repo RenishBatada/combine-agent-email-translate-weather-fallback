@@ -16,15 +16,25 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if "session_manager" not in st.session_state:
     st.session_state.session_manager = SessionManager()
 
+def get_chat_history(messages):
+    """Get message pairs from chat history."""
+    history = []
+    for i in range(0, len(messages)-1, 2):  # Step by 2 to get pairs
+        if i+1 < len(messages):  # Ensure we have a pair
+            if messages[i]["role"] == "user" and messages[i+1]["role"] == "assistant":
+                history.append((messages[i]["content"], messages[i+1]["content"]))
+    print(f"DEBUG: Chat history pairs: {len(history)}")
+    return history
+
 def initialize_agents():
     """Initialize all agents with necessary API keys."""
     agents = [
         EmailAgent(GROQ_API_KEY),
         TranslateAgent(GROQ_API_KEY),
         WeatherAgent(GROQ_API_KEY),
-        FallbackAgent(GROQ_API_KEY)  # Fallback agent should be last
+        FallbackAgent(GROQ_API_KEY)
     ]
-    return AgentRouter(agents)
+    return AgentRouter(agents, GROQ_API_KEY)
 
 def main():
     st.title("🤖 Multi-Agent Assistant")
@@ -36,9 +46,10 @@ def main():
     """)
 
     # Initialize agent router
-    agent_router = initialize_agents()
+    if "agent_router" not in st.session_state:
+        st.session_state.agent_router = initialize_agents()
 
-    # Chat interface
+    # Initialize messages if not in session state
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -54,11 +65,15 @@ def main():
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # Get chat history
+        chat_history = get_chat_history(st.session_state.messages)
+        print(f"DEBUG: Processing query: {prompt}")
+
         # Get response from appropriate agent
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                agent = agent_router.route_query(prompt)
-                response = agent.process(prompt)
+                agent = st.session_state.agent_router.route_query(prompt, chat_history)
+                response = agent.process(prompt, chat_history)
                 st.markdown(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
 
@@ -66,7 +81,7 @@ def main():
         st.session_state.session_manager.add_message(
             session_id=str(id(st.session_state)),
             user_message=prompt,
-            bot_message=response
+            bot_message=response,
         )
 
 if __name__ == "__main__":
